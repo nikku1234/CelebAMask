@@ -9,7 +9,7 @@ class celebDatasetTrain(Dataset):
     def __init__(self, root_dir, transform, target_transform=None) -> None:
         super().__init__()
         self.root_dir = root_dir
-
+        self.transform = transform
         self.train_image_path = glob2.glob(root_dir+'/train_img/*.jpg', recursive=True)
         self.train_label_path = glob2.glob(root_dir+'/train_label/*.png', recursive=True)
 
@@ -25,11 +25,12 @@ class celebDatasetTrain(Dataset):
 
     def __getitem__(self,idx):
         image = cv2.imread(self.train_image_path[idx])
+        image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_AREA)
         image = Image.fromarray(image)
         image = self.transform(image)
         label = cv2.imread(self.train_label_path[idx])
         label = Image.fromarray(label)
-        label = self.transform(image)
+        label = self.transform(label)
         final = {
             "image": image,
             "label": label
@@ -41,6 +42,7 @@ class celebDatasetVal(Dataset):
     def __init__(self, root_dir, transform, target_transform=None) -> None:
         super().__init__()
         self.root_dir = root_dir
+        self.transform = transform
 
         # self.train_image_path = glob2.glob(
         #     root_dir+'/train_img/*.jpg', recursive=True)
@@ -62,11 +64,12 @@ class celebDatasetVal(Dataset):
 
     def __getitem__(self, idx):
         image = cv2.imread(self.val_image_path[idx])
+        image = cv2.resize(image, (512,512), interpolation=cv2.INTER_AREA)
         image = Image.fromarray(image)
         image = self.transform(image)
         label = cv2.imread(self.val_lable_path[idx])
         label = Image.fromarray(label)
-        label = self.transform(image)
+        label = self.transform(label)
         final = {
             "image": image,
             "label": label
@@ -78,6 +81,7 @@ class celebDatasetTest(Dataset):
     def __init__(self, root_dir, transform, target_transform=None) -> None:
         super().__init__()
         self.root_dir = root_dir
+        self.transform = transform
 
         # self.train_image_path = glob2.glob(
         #     root_dir+'/train_img/*.jpg', recursive=True)
@@ -99,11 +103,12 @@ class celebDatasetTest(Dataset):
 
     def __getitem__(self, idx):
         image = cv2.imread(self.test_image_path[idx])
+        image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_AREA)
         image = Image.fromarray(image)
         image = self.transform(image)
         label = cv2.imread(self.test_lable_path[idx])
         label = Image.fromarray(label)
-        label = self.transform(image)
+        label = self.transform(label)
         final = {
             "image": image,
             "label": label

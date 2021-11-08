@@ -3,6 +3,7 @@ import os
 import glob
 from posixpath import join
 from re import split
+from cv2 import phase
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -14,9 +15,13 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import argparse
 from torchvision.transforms.transforms import RandomAffine, RandomVerticalFlip
 from dataLoader.celebDataset import celebDatasetTrain,celebDatasetVal,celebDatasetTest
-from model.unet import unet
+# from model.unet import unet
 from matplotlib import pyplot as plt
 from torchsummary import summary
+from collections import defaultdict
+import torch.nn.functional as F
+from loss.loss import dice_loss
+from model.new_unet import ResNetUNet
 
 train_losses = []
 train_accu = []
@@ -73,19 +78,44 @@ def save_statistics(epoch, training_loss, train_accuracy, validation_loss, valid
         file.write(data)
 
 
+def calc_loss(pred, target, metrics, bce_weight=0.5):
+    bce = F.binary_cross_entropy_with_logits(pred, target)
+
+    pred = F.sigmoid(pred)
+    dice = dice_loss(pred, target)
+
+    loss = bce * bce_weight + dice * (1 - bce_weight)
+
+    metrics['bce'] += bce.data.cpu().numpy() * target.size(0)
+    metrics['dice'] += dice.data.cpu().numpy() * target.size(0)
+    metrics['loss'] += loss.data.cpu().numpy() * target.size(0)
+
+    return loss
+
+
+def print_metrics(metrics, epoch_samples, phase):
+    outputs = []
+    for k in metrics.keys():
+        outputs.append("{}: {:4f}".format(k, metrics[k] / epoch_samples))
+
+    print("{}: {}".format(phase, ", ".join(outputs)))
+
 def train(args, model, device, train_loader, optimizer, scheduler, epoch, criterion):
     model.train()
     running_loss = 0.0
     sub_loss = 0.0
     correct = 0
     total = 0
-
+    metrics = defaultdict(float)
+    epoch_samples = 0
+    phase = 'train'
     for batch_idx, data in enumerate(train_loader):
         inputs = data['image'].to(device)
-        labels = data['class_id'].to(device)
+        labels = data['label'].to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
-        loss = criterion(outputs, labels)
+        loss = calc_loss(outputs, labels, metrics)
+        # loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -98,7 +128,11 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         if (batch_idx + 1) % 3 == 0:
             print("loss:", sub_loss/3, "Accuracy:", correct/total)
             sub_loss = 0.0
+        # statistics
+        epoch_samples += inputs.size(0)
 
+    print_metrics(metrics, epoch_samples, phase)
+    epoch_loss = metrics['loss'] / epoch_samples
     # scheduler.step()
     train_loss = running_loss/len(train_loader)
     accu = 100.*correct/total
@@ -120,7 +154,7 @@ def test(model, device, test_loader, criterion):
     with torch.no_grad():
         for i, data in enumerate(test_loader, 0):
             inputs = data['image'].to(device)
-            labels = data['class_id'].to(device)
+            labels = data['label'].to(device)
             # calculate outputs by running images through the network
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -142,9 +176,9 @@ def test(model, device, test_loader, criterion):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='CelebHQ')
-    parser.add_argument('--batch-size', type=int, default=512, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 32)')
-    parser.add_argument('--test-batch-size', type=int, default=512, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=1, metavar='N',
                         help='input batch size for testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of epochs to train (default: 14)')
@@ -186,8 +220,7 @@ def main():
     checkpoint_dir = './checkpoints/model1/'
     if not os.path.exists(checkpoint_dir):
         os.mkdir(checkpoint_dir)
-    # load_checkpoint_path = '/home/nikhil/673/ckpts/model_75.pt'
-    # load_checkpoint_path = './checkpoints/ckpts_resnet18_cubs_seq12_f1/model_60.pt'
+
     load_checkpoint_path = None
 
     celebDataset_train = celebDatasetTrain(root_dir,transformation)
@@ -204,9 +237,19 @@ def main():
     test_loader = DataLoader(celabDataset_test, **test_kwargs, shuffle=True, num_workers=6)
 
 
-    model = Net()
-    model.to(device)
-    print(model)
+    # model = unet()
+    # model.to(device)
+    # print(model)
+
+    model = ResNetUNet(n_class=19)
+
+
+    model = model.to(device)
+
+    # check keras-like model summary using torchsummary
+    summary(model, input_size=(3, 512, 512))
+
+
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=2e-5)
     criterion = nn.CrossEntropyLoss().to(device)
     last_epoch = 0
