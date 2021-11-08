@@ -47,17 +47,17 @@ import pandas as pd
 
 
 
-pose_file = "/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/CelebAMask-HQ-pose-anno.txt"
-with open(pose_file) as f:
-    pose_mapping = f.readlines()
+# pose_file = "/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/CelebAMask-HQ-pose-anno.txt"
+# with open(pose_file) as f:
+#     pose_mapping = f.readlines()
 
-columns = pose_mapping[1].strip().split(" ")
-print(columns)
-# print(pose_mapping[2].strip().split(" ")[1:])
+# columns = pose_mapping[1].strip().split(" ")
+# print(columns)
+# # print(pose_mapping[2].strip().split(" ")[1:])
 
-pose_data = []
-for row in range(2, len(pose_mapping)):
-    pose_data.append(pose_mapping[row].strip().split(" ")[1:])
-print(len(columns))
-new = pd.DataFrame(pose_data, columns=columns)
-print(new.head())
+# pose_data = []
+# for row in range(2, len(pose_mapping)):
+#     pose_data.append(pose_mapping[row].strip().split(" ")[1:])
+# print(len(columns))
+# new = pd.DataFrame(pose_data, columns=columns)
+# print(new.head())
