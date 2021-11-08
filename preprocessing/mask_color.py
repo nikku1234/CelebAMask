@@ -9,7 +9,7 @@ color_list = [[0, 0, 0], [204, 0, 0], [76, 153, 0], [204, 204, 0], [51, 51, 255]
 
 folder_base = '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/mask'
 folder_save = '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/mask_color'
-img_num = 3000
+img_num = 30000
 
 
 for k in range(img_num):
