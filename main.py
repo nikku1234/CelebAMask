@@ -27,9 +27,9 @@ from model.unet import unet
 from utils import *
 
 train_losses = []
-train_accu = []
+train_iou = []
 eval_losses = []
-eval_accu = []
+eval_iou = []
 
 
 def reset_grad(self):
@@ -134,69 +134,33 @@ This should be differentiable.
 SMOOTH = 1e-6
 
 
-def iou_pytorch(outputs: torch.Tensor, labels: torch.Tensor):
-    # You can comment out this line if you are passing tensors of equal shape
-    # But if you are passing output from UNet or something it will most probably
-    # be with the BATCH x 1 x H x W shape
-    outputs = outputs.squeeze(1)  # BATCH x 1 x H x W => BATCH x H x W
 
-    intersection = (outputs & labels).float().sum(
-        (1, 2))  # Will be zero if Truth=0 or Prediction=0
-    union = (outputs | labels).float().sum(
-        (1, 2))         # Will be zzero if both are 0
+# def _fast_hist(true, pred, num_classes):
+#     mask = (true >= 0) & (true < num_classes)
+#     hist = torch.bincount(
+#         num_classes * true[mask] + pred[mask],
+#         minlength=num_classes ** 2,
+#     ).reshape(num_classes, num_classes).float()
+#     return hist
 
-    # We smooth our devision to avoid 0/0
-    iou = (intersection + SMOOTH) / (union + SMOOTH)
-
-    # This is equal to comparing with thresolds
-    thresholded = torch.clamp(20 * (iou - 0.5), 0, 10).ceil() / 10
-
-    # Or thresholded.mean() if you are interested in average across the batch
-    return thresholded
+# # computes IoU based on confusion matrix
 
 
-# def IoU_score(inputs, targets, num_classes=19, smooth=1e-5):
-#     with torch.no_grad():
-#         #soft = nn.Softmax2d()
-#         inputs = F.softmax(inputs, dim=1)  # convert into probabilites 0-1
-#         targets = F.one_hot(targets, num_classes=19).permute(0, 3, 1, 2).contiguous()  # convert target into one-hot
-
-#         inputs = inputs.contiguous().view(-1)
-#         targets = targets.view(-1)
-
-#         intersection = (inputs * targets).sum()
-#         total = (inputs + targets).sum()
-#         union = total - intersection
-
-#         IoU = (intersection + smooth)/(union + smooth)
-
-#         return IoU.item()
-def _fast_hist(true, pred, num_classes):
-    mask = (true >= 0) & (true < num_classes)
-    hist = torch.bincount(
-        num_classes * true[mask] + pred[mask],
-        minlength=num_classes ** 2,
-    ).reshape(num_classes, num_classes).float()
-    return hist
-
-# computes IoU based on confusion matrix
-
-
-def jaccard_index(hist):
-    """Computes the Jaccard index, a.k.a the Intersection over Union (IoU).
-    Args:
-        hist: confusion matrix.
-    Returns:
-        avg_jacc: the average per-class jaccard index.
-    """
-    EPS = 1e-9
-    A_inter_B = torch.diag(hist)
-    A = hist.sum(dim=1)
-    B = hist.sum(dim=0)
-    jaccard = A_inter_B / (A + B - A_inter_B + EPS)
-    # avg_jacc = torch.nanmean(jaccard)  # the mean of jaccard without NaNs
-    avg_jacc = torch.mean(jaccard[~jaccard.isnan()])
-    return avg_jacc, jaccard
+# def jaccard_index(hist):
+#     """Computes the Jaccard index, a.k.a the Intersection over Union (IoU).
+#     Args:
+#         hist: confusion matrix.
+#     Returns:
+#         avg_jacc: the average per-class jaccard index.
+#     """
+#     EPS = 1e-9
+#     A_inter_B = torch.diag(hist)
+#     A = hist.sum(dim=1)
+#     B = hist.sum(dim=0)
+#     jaccard = A_inter_B / (A + B - A_inter_B + EPS)
+#     # avg_jacc = torch.nanmean(jaccard)  # the mean of jaccard without NaNs
+#     avg_jacc = torch.mean(jaccard[~jaccard.isnan()])
+#     return avg_jacc, jaccard
 
 def mIOU(label, pred, num_classes=19):
     pred = F.softmax(pred, dim=1)              
@@ -228,7 +192,7 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
     model.train()
     running_loss = 0.0
     sub_loss = 0.0
-    correct = 0
+    total_iou = 0
     total = 0
     metrics = defaultdict(float)
     epoch_samples = 0
@@ -286,11 +250,11 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # iou = IoU_score(outputs, labels)
         # iou = jaccard_index(_fast_hist(labels.long(), mask.long(), 19))
         iou = mIOU(labels, outputs)
+        total_iou += iou
         # _fast_hist(true, pred, num_classes=2)
-        print("iou",iou)
         loss.backward()
         optimizer.step()
-        # running_loss += loss.item()
+        running_loss += loss.item()
         # sub_loss += loss.item()
 
         # _, predicted = torch.max(outputs, 1)
@@ -303,23 +267,23 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # statistics
         epoch_samples += inputs.size(0)
 
-    print_metrics(metrics, epoch_samples, phase)
-    epoch_loss = metrics['loss'] / epoch_samples
+        # print("iou",iou)
     # scheduler.step()
     train_loss = running_loss/len(train_loader)
-    accu = 100.*correct/total
-
-    train_accu.append(accu)
+    # accu = 100.*correct/total
+    mean_iou = total_iou / len(train_loader)
     train_losses.append(train_loss)
-    print('Train Loss: %.3f | Accuracy: %.3f' % (train_loss, accu))
-    return train_loss, accu
+    train_iou.append(mean_iou)
+    # mean_iou = total_iou/len(train_loader)
+    print('Train Loss: %.3f | IoU: %.3f' % (train_loss, mean_iou))
+    return train_loss, mean_iou
 
 
 def test(model, device, test_loader, criterion):
     model.eval()
     test_loss = 0
     running_loss = 0.0
-    correct = 0
+    total_iou = 0
     total = 0
 
     # since we're not training, we don't need to calculate the gradients for our outputs
@@ -329,53 +293,54 @@ def test(model, device, test_loader, criterion):
             labels = data['label'].to(device)
             # calculate outputs by running images through the network
             outputs = model(inputs)
-            mask = torch.zeros((512, 512))
-            atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
-                    'nose', 'mouth', 'u_lip', 'l_lip', 'neck', 'neck_l', 'cloth', 'hair', 'hat']
+            # mask = torch.zeros((512, 512))
+            # atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
+            #         'nose', 'mouth', 'u_lip', 'l_lip', 'neck', 'neck_l', 'cloth', 'hair', 'hat']
 
-            for l, att in enumerate(atts, 1):
-                total += 1
-                # file_name = ''.join([str(j).rjust(5, '0'), '_', att, '.png'])
-                # path = osp.join(face_sep_mask, str(i), file_name)
+            # for l, att in enumerate(atts, 1):
+            #     total += 1
+            #     # file_name = ''.join([str(j).rjust(5, '0'), '_', att, '.png'])
+            #     # path = osp.join(face_sep_mask, str(i), file_name)
 
-                # if os.path.exists(path):
-                # counter += 1
-                # sep_mask = np.array(Image.open(path).convert('P'))
-                for channel in range(int(outputs.size()[1])):
-                    sep_mask = outputs[:, channel, :, :].squeeze()
-                    # print(np.unique(sep_mask))
-                    mask[sep_mask == 225] = l
+            #     # if os.path.exists(path):
+            #     # counter += 1
+            #     # sep_mask = np.array(Image.open(path).convert('P'))
+            #     for channel in range(int(outputs.size()[1])):
+            #         sep_mask = outputs[:, channel, :, :].squeeze()
+            #         # print(np.unique(sep_mask))
+            #         mask[sep_mask == 225] = l
 
 
-            labels = labels.reshape((1, 512, 512))
+            labels = labels.reshape((labels.size(0), 512, 512))
             loss = criterion(outputs, labels.long())
             # iou = IoU_score(outputs, labels)
-            iou = jaccard_index(_fast_hist(
-            labels.long(), mask.unsqueeze(dim=0).long(), 19))
+            total_iou += mIOU(labels, outputs)
             # _fast_hist(true, pred, num_classes=2)
-            print("test loss", loss.item())
-            print("test iou", iou[0])
+            # print("test loss", loss.item())
+            # print("test iou", iou[0])
             running_loss += loss.item()
 
-            _, predicted = outputs.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
+            # _, predicted = outputs.max(1)
+            # total += labels.size(0)
+            # correct += predicted.eq(labels).sum().item()
         test_loss = running_loss/len(test_loader)
-        accu = 100.*correct/total
+        # accu = 100.*correct/total
 
         eval_losses.append(test_loss)
-        eval_accu.append(accu)
+        # eval_accu.append(accu)
+        mean_iou = total_iou / len(test_loader)
+        eval_iou.append(mean_iou)
 
-        print('Test Loss: %.3f | Accuracy: %.3f' % (test_loss, accu))
-        return test_loss, accu
+        print('Test Loss: %.3f | IoU: %.3f' % (test_loss, mean_iou))
+        return test_loss, eval_iou
 
 
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='CelebHQ')
-    parser.add_argument('--batch-size', type=int, default=8, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=12, metavar='N',
                         help='input batch size for training (default: 32)')
-    parser.add_argument('--test-batch-size', type=int, default=8, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=12, metavar='N',
                         help='input batch size for testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of epochs to train (default: 14)')
@@ -408,6 +373,7 @@ def main():
                                         transforms.Resize((512,512)),
                                          transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
     transformation_val = transforms.Compose([transforms.ToTensor(),
+                                            transforms.Resize((512, 512)),
                                              transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
     transformation_target = transforms.Compose([transforms.ToTensor()])
 

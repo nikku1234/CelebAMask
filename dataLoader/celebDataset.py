@@ -52,20 +52,14 @@ class celebDatasetVal(Dataset):
         self.root_dir = root_dir
         self.transform = transform
 
-        # self.train_image_path = glob2.glob(
-        #     root_dir+'/train_img/*.jpg', recursive=True)
-        # self.train_label_path = glob2.glob(
-        #     root_dir+'/train_label/*.png', recursive=True)
 
         self.val_image_path = glob2.glob(
             root_dir+'/val_img/*.jpg', recursive=True)
-        self.val_label_path = glob2.glob(
-            root_dir+'/val_label/*.png', recursive=True)
-
-        # self.test_image_path = glob2.glob(
-        #     root_dir+'/test_img/*.jpg', recursive=True)
-        # self.test_label_path = glob2.glob(
-        #     root_dir+'/test_label/*.png', recursive=True)
+        self.val_label_path = []
+        for val in self.val_image_path:
+            fname = val.split('/')[-1]
+            fname = fname.split('.')[0]
+            self.val_label_path.append(root_dir + '/val_label/' + fname + '.png')
 
     def __len__(self):
         return len(self.val_image_path)
@@ -96,21 +90,15 @@ class celebDatasetTest(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        # self.train_image_path = glob2.glob(
-        #     root_dir+'/train_img/*.jpg', recursive=True)
-        # self.train_label_path = glob2.glob(
-        #     root_dir+'/train_label/*.png', recursive=True)
-
-        # self.val_image_path = glob2.glob(
-        #     root_dir+'/val_img/*.jpg', recursive=True)
-        # self.val_lable_path = glob2.glob(
-        #     root_dir+'/val_label/*.png', recursive=True)
-
         self.test_image_path = glob2.glob(
             root_dir+'/test_img/*.jpg', recursive=True)
-        self.test_label_path = glob2.glob(
-            root_dir+'/test_label/*.png', recursive=True)
-
+        # self.test_label_path = glob2.glob(
+        #     root_dir+'/test_label/*.png', recursive=True)
+        self.test_label_path = []
+        for val in self.test_image_path:
+            fname = val.split('/')[-1]
+            fname = fname.split('.')[0]
+            self.test_label_path.append(root_dir + '/test_label/' + fname + '.png')
     def __len__(self):
         return len(self.test_image_path)
 
