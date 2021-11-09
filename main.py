@@ -198,6 +198,30 @@ def jaccard_index(hist):
     avg_jacc = torch.mean(jaccard[~jaccard.isnan()])
     return avg_jacc, jaccard
 
+def mIOU(label, pred, num_classes=19):
+    pred = F.softmax(pred, dim=1)              
+    pred = torch.argmax(pred, dim=1).squeeze(1)
+    iou_list = list()
+    present_iou_list = list()
+
+    pred = pred.view(-1)
+    label = label.view(-1)
+    # Note: Following for loop goes from 0 to (num_classes-1)
+    # and ignore_index is num_classes, thus ignore_index is
+    # not considered in computation of IoU.
+    for sem_class in range(num_classes):
+        pred_inds = (pred == sem_class)
+        target_inds = (label == sem_class)
+        if target_inds.long().sum().item() == 0:
+            iou_now = float('nan')
+        else: 
+            intersection_now = (pred_inds[target_inds]).long().sum().item()
+            union_now = pred_inds.long().sum().item() + target_inds.long().sum().item() - intersection_now
+            iou_now = float(intersection_now) / float(union_now)
+            present_iou_list.append(iou_now)
+        iou_list.append(iou_now)
+    return np.mean(present_iou_list)
+
 
 
 def train(args, model, device, train_loader, optimizer, scheduler, epoch, criterion):
@@ -225,44 +249,45 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # print(labels.size())
         optimizer.zero_grad()
         outputs = model(inputs)
-        mask = torch.zeros((labels.size(0), 512, 512)).to(device)
+        # mask = torch.zeros((labels.size(0), 512, 512)).to(device)
 
 
-        atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
-        'nose', 'mouth', 'u_lip', 'l_lip', 'neck', 'neck_l', 'cloth', 'hair', 'hat']
+        # atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
+        # 'nose', 'mouth', 'u_lip', 'l_lip', 'neck', 'neck_l', 'cloth', 'hair', 'hat']
 
-        for l, att in enumerate(atts, 1):
-            total += 1
-            # file_name = ''.join([str(j).rjust(5, '0'), '_', att, '.png'])
-            # path = osp.join(face_sep_mask, str(i), file_name)
+        # for l, att in enumerate(atts, 1):
+        #     total += 1
+        #     # file_name = ''.join([str(j).rjust(5, '0'), '_', att, '.png'])
+        #     # path = osp.join(face_sep_mask, str(i), file_name)
 
-            # if os.path.exists(path):
-                # counter += 1
-            # sep_mask = np.array(Image.open(path).convert('P'))
-            for channel in range(int(outputs.size()[1])):
-                sep_mask = outputs[:, channel, :, :].squeeze()
-                # print(np.unique(sep_mask))
-                mask[sep_mask == 225] = l
+        #     # if os.path.exists(path):
+        #         # counter += 1
+        #     # sep_mask = np.array(Image.open(path).convert('P'))
+        #     for channel in range(int(outputs.size()[1])):
+        #         sep_mask = outputs[:, channel, :, :].squeeze()
+        #         # print(np.unique(sep_mask))
+        #         mask[torch.round(sep_mask) == 225] = l
 
-        # criterion = nn.NLLLoss()
+        # # criterion = nn.NLLLoss()
         
-        # c_loss = cross_entropy2d(outputs, labels_real_plain.long())
-        # print(c_loss.item())
-        # reset_grad()
+        # # c_loss = cross_entropy2d(outputs, labels_real_plain.long())
+        # # print(c_loss.item())
+        # # reset_grad()
 
 
 
-        # loss = dice_loss(outputs,labels)
-        # loss = calc_loss(outputs, labels, metrics)
-        # mask = mask.flatten()
+        # # loss = dice_loss(outputs,labels)
+        # # loss = calc_loss(outputs, labels, metrics)
+        # # mask = mask.flatten()
 
         labels = labels.reshape((labels.size(0), 512, 512))
         loss = criterion(outputs, labels.long())
         print("loss", loss.item())
         # iou = IoU_score(outputs, labels)
-        iou = jaccard_index(_fast_hist(labels.long(), mask.long(), 19))
+        # iou = jaccard_index(_fast_hist(labels.long(), mask.long(), 19))
+        iou = mIOU(labels, outputs)
         # _fast_hist(true, pred, num_classes=2)
-        print("iou",iou[0])
+        print("iou",iou)
         loss.backward()
         optimizer.step()
         # running_loss += loss.item()

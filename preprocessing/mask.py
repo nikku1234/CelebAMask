@@ -30,7 +30,7 @@ for i in range(15):
                 # print(np.unique(sep_mask))
 
                 mask[sep_mask == 225] = l
-        cv2.imwrite('{}/{}.png'.format(mask_path, j), mask)
+        # cv2.imwrite('{}/{}.png'.format(mask_path, j), mask)
         print(j)
 
 print(counter, total)

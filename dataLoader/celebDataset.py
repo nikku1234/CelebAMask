@@ -6,6 +6,7 @@ import cv2
 from PIL import Image
 import torchvision.transforms as transforms
 import numpy as np
+import torch
 
 class celebDatasetTrain(Dataset):
     def __init__(self, root_dir, transform, target_transform=None) -> None:
@@ -14,13 +15,18 @@ class celebDatasetTrain(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.train_image_path = glob2.glob(root_dir+'/train_img/*.jpg', recursive=True)
-        self.train_label_path = glob2.glob(root_dir+'/train_label/*.png', recursive=True)
+        # self.train_label_path = glob2.glob(root_dir+'/train_label/*.png', recursive=True)
+        self.train_label_path = []
+        for val in self.train_image_path:
+            fname = val.split('/')[-1]
+            fname = fname.split('.')[0]
+            self.train_label_path.append(root_dir + '/train_label/' + fname + '.png')
 
     def __len__(self):
         return len(self.train_image_path)
 
     def __getitem__(self,idx):
-
+        # torch.set_printoptions(profile="full")
         image = cv2.imread(self.train_image_path[idx])
         # image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_AREA)
         image = Image.fromarray(image)
@@ -28,7 +34,10 @@ class celebDatasetTrain(Dataset):
         label = Image.open(self.train_label_path[idx])
         image = self.transform(image)
         label = self.target_transform(label)
-
+        label *= 255
+        # print(label.min(), label.max())
+        label = label.long()
+        # print("img:", self.train_image_path[idx], 'label:', self.train_label_path[idx])
         final = {
             "image": image,
             "label": label
@@ -71,7 +80,8 @@ class celebDatasetVal(Dataset):
             self.val_label_path[idx])
         image = self.transform(image)
         label = self.target_transform(label)
-
+        label *= 255
+        label = label.long()
         final = {
             "image": image,
             "label": label
@@ -84,6 +94,7 @@ class celebDatasetTest(Dataset):
         super().__init__()
         self.root_dir = root_dir
         self.transform = transform
+        self.target_transform = target_transform
 
         # self.train_image_path = glob2.glob(
         #     root_dir+'/train_img/*.jpg', recursive=True)
@@ -112,7 +123,8 @@ class celebDatasetTest(Dataset):
             self.test_label_path[idx])
         image = self.transform(image)
         label = self.target_transform(label)
-
+        label *= 255
+        label = label.long()
         final = {
             "image": image,
             "label": label
