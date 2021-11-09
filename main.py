@@ -225,7 +225,7 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # print(labels.size())
         optimizer.zero_grad()
         outputs = model(inputs)
-        mask = torch.zeros((512, 512))
+        mask = torch.zeros((labels.size(0), 512, 512))
 
 
         atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
@@ -255,12 +255,13 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # loss = dice_loss(outputs,labels)
         # loss = calc_loss(outputs, labels, metrics)
         # mask = mask.flatten()
-        labels = labels.reshape((1, 512, 512))
+
+        labels = labels.reshape((labels.size(0), 512, 512))
         loss = criterion(outputs, labels.long())
+        print("loss", loss.item())
         # iou = IoU_score(outputs, labels)
-        iou = jaccard_index(_fast_hist(labels.long(), mask.unsqueeze(dim=0).long(), 19))
+        iou = jaccard_index(_fast_hist(labels.long(), mask.long(), 19))
         # _fast_hist(true, pred, num_classes=2)
-        print("loss",loss.item())
         print("iou",iou[0])
         loss.backward()
         optimizer.step()
@@ -303,7 +304,32 @@ def test(model, device, test_loader, criterion):
             labels = data['label'].to(device)
             # calculate outputs by running images through the network
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            mask = torch.zeros((512, 512))
+            atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
+                    'nose', 'mouth', 'u_lip', 'l_lip', 'neck', 'neck_l', 'cloth', 'hair', 'hat']
+
+            for l, att in enumerate(atts, 1):
+                total += 1
+                # file_name = ''.join([str(j).rjust(5, '0'), '_', att, '.png'])
+                # path = osp.join(face_sep_mask, str(i), file_name)
+
+                # if os.path.exists(path):
+                # counter += 1
+                # sep_mask = np.array(Image.open(path).convert('P'))
+                for channel in range(int(outputs.size()[1])):
+                    sep_mask = outputs[:, channel, :, :].squeeze()
+                    # print(np.unique(sep_mask))
+                    mask[sep_mask == 225] = l
+
+
+            labels = labels.reshape((1, 512, 512))
+            loss = criterion(outputs, labels.long())
+            # iou = IoU_score(outputs, labels)
+            iou = jaccard_index(_fast_hist(
+            labels.long(), mask.unsqueeze(dim=0).long(), 19))
+            # _fast_hist(true, pred, num_classes=2)
+            print("test loss", loss.item())
+            print("test iou", iou[0])
             running_loss += loss.item()
 
             _, predicted = outputs.max(1)
@@ -322,9 +348,9 @@ def test(model, device, test_loader, criterion):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='CelebHQ')
-    parser.add_argument('--batch-size', type=int, default=1, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 32)')
-    parser.add_argument('--test-batch-size', type=int, default=1, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
                         help='input batch size for testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of epochs to train (default: 14)')
