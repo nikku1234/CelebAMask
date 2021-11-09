@@ -7,6 +7,7 @@ from cv2 import phase
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from torchvision import io
 import torchvision.transforms as transforms
 import torch.optim as optim
 from torchvision.io import read_image
@@ -22,6 +23,7 @@ from collections import defaultdict
 import torch.nn.functional as F
 from loss.loss import dice_loss
 from model.new_unet import ResNetUNet
+from model.unet import unet
 from utils import *
 
 train_losses = []
@@ -126,6 +128,77 @@ This should be differentiable.
 
     return 1 - ((2. * intersection + smooth) / (A_sum + B_sum + smooth))
 
+# PyTroch version
+
+
+SMOOTH = 1e-6
+
+
+def iou_pytorch(outputs: torch.Tensor, labels: torch.Tensor):
+    # You can comment out this line if you are passing tensors of equal shape
+    # But if you are passing output from UNet or something it will most probably
+    # be with the BATCH x 1 x H x W shape
+    outputs = outputs.squeeze(1)  # BATCH x 1 x H x W => BATCH x H x W
+
+    intersection = (outputs & labels).float().sum(
+        (1, 2))  # Will be zero if Truth=0 or Prediction=0
+    union = (outputs | labels).float().sum(
+        (1, 2))         # Will be zzero if both are 0
+
+    # We smooth our devision to avoid 0/0
+    iou = (intersection + SMOOTH) / (union + SMOOTH)
+
+    # This is equal to comparing with thresolds
+    thresholded = torch.clamp(20 * (iou - 0.5), 0, 10).ceil() / 10
+
+    # Or thresholded.mean() if you are interested in average across the batch
+    return thresholded
+
+
+# def IoU_score(inputs, targets, num_classes=19, smooth=1e-5):
+#     with torch.no_grad():
+#         #soft = nn.Softmax2d()
+#         inputs = F.softmax(inputs, dim=1)  # convert into probabilites 0-1
+#         targets = F.one_hot(targets, num_classes=19).permute(0, 3, 1, 2).contiguous()  # convert target into one-hot
+
+#         inputs = inputs.contiguous().view(-1)
+#         targets = targets.view(-1)
+
+#         intersection = (inputs * targets).sum()
+#         total = (inputs + targets).sum()
+#         union = total - intersection
+
+#         IoU = (intersection + smooth)/(union + smooth)
+
+#         return IoU.item()
+def _fast_hist(true, pred, num_classes):
+    mask = (true >= 0) & (true < num_classes)
+    hist = torch.bincount(
+        num_classes * true[mask] + pred[mask],
+        minlength=num_classes ** 2,
+    ).reshape(num_classes, num_classes).float()
+    return hist
+
+# computes IoU based on confusion matrix
+
+
+def jaccard_index(hist):
+    """Computes the Jaccard index, a.k.a the Intersection over Union (IoU).
+    Args:
+        hist: confusion matrix.
+    Returns:
+        avg_jacc: the average per-class jaccard index.
+    """
+    EPS = 1e-9
+    A_inter_B = torch.diag(hist)
+    A = hist.sum(dim=1)
+    B = hist.sum(dim=0)
+    jaccard = A_inter_B / (A + B - A_inter_B + EPS)
+    # avg_jacc = torch.nanmean(jaccard)  # the mean of jaccard without NaNs
+    avg_jacc = torch.mean(jaccard[~jaccard.isnan()])
+    return avg_jacc, jaccard
+
+
 
 def train(args, model, device, train_loader, optimizer, scheduler, epoch, criterion):
     model.train()
@@ -140,30 +213,54 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         inputs = data['image'].to(device)
         labels = data['label'].to(device)
         size = labels.size()
-        labels[:, 0, :, :] = labels[:, 0, :, :] * 255.0
-        labels_real_plain = labels[:, 0, :, :].cuda()
-        labels = labels[:, 0, :, :].view(size[0], 1, size[2], size[3])
-        oneHot_size = (size[0], 19, size[2], size[3])
-        labels_real = torch.cuda.FloatTensor(torch.Size(oneHot_size)).zero_()
-        labels_real = labels_real.scatter_(1, labels.data.long().cuda(), 1.0)
 
+        # labels[:, 0, :, :] = labels[:, 0, :, :] * 255.0
+        # labels_real_plain = labels[:, 0, :, :].cuda()
+        # labels = labels[:, 0, :, :].view(size[0], 1, size[2], size[3])
+        # oneHot_size = (size[0], 19, size[2], size[3])
+        # labels_real = torch.cuda.FloatTensor(torch.Size(oneHot_size)).zero_()
+        # labels_real = labels_real.scatter_(1, labels.data.long().cuda(), 1.0)
 
-        
         # labels = labels.squeeze()
         # print(labels.size())
         optimizer.zero_grad()
         outputs = model(inputs)
-        # criterion = nn.NLLLoss()
+        mask = torch.zeros((512, 512))
 
-        c_loss = cross_entropy2d(outputs, labels_real_plain.long())
-        print(c_loss.item())
-        reset_grad()
+
+        atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
+        'nose', 'mouth', 'u_lip', 'l_lip', 'neck', 'neck_l', 'cloth', 'hair', 'hat']
+
+        for l, att in enumerate(atts, 1):
+            total += 1
+            # file_name = ''.join([str(j).rjust(5, '0'), '_', att, '.png'])
+            # path = osp.join(face_sep_mask, str(i), file_name)
+
+            # if os.path.exists(path):
+                # counter += 1
+            # sep_mask = np.array(Image.open(path).convert('P'))
+            for channel in range(int(outputs.size()[1])):
+                sep_mask = outputs[:, channel, :, :].squeeze()
+                # print(np.unique(sep_mask))
+                mask[sep_mask == 225] = l
+
+        # criterion = nn.NLLLoss()
+        
+        # c_loss = cross_entropy2d(outputs, labels_real_plain.long())
+        # print(c_loss.item())
+        # reset_grad()
 
 
 
         # loss = dice_loss(outputs,labels)
-        loss = calc_loss(outputs, labels, metrics)
-        # loss = criterion(outputs, labels_real)
+        # loss = calc_loss(outputs, labels, metrics)
+        # mask = mask.flatten()
+        labels = labels.reshape((1, 512, 512))
+        loss = criterion(outputs, labels.long())
+        # iou = IoU_score(outputs, labels)
+        iou = jaccard_index(_fast_hist(labels.long(), mask.unsqueeze(dim=0).long(), 19))
+        # _fast_hist(true, pred, num_classes=2)
+        print("iou",iou[0])
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -256,12 +353,11 @@ def main():
     print("test_batch size", test_kwargs)
 
     transformation = transforms.Compose([transforms.ToTensor(),
-                                         transforms.RandomAffine(
-                                             degrees=(-30, 30), translate=(0.1, 0.1), shear=(0.2)),
-                                         transforms.RandomHorizontalFlip(0.3),
-                                         transforms.RandomGrayscale(0.3),
-                                         transforms.RandomVerticalFlip(0.3),
+                                        transforms.Resize((512,512)),
                                          transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+    transformation_val = transforms.Compose([transforms.ToTensor(),
+                                             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+    transformation_target = transforms.Compose([transforms.ToTensor()])
 
     root_dir = '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/data'
 
@@ -271,12 +367,15 @@ def main():
 
     load_checkpoint_path = None
 
-    celebDataset_train = celebDatasetTrain(root_dir,transformation)
+    celebDataset_train = celebDatasetTrain(
+        root_dir, transformation, transformation_target)
 
-    transformation_val = transforms.Compose([transforms.ToTensor(),
-                                             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-    celebDataset_val = celebDatasetVal(root_dir, transformation_val)
-    celabDataset_test = celebDatasetTest(root_dir, transformation_val)
+    
+    
+    celebDataset_val = celebDatasetVal(
+        root_dir, transformation_val, transformation_target)
+
+    celabDataset_test = celebDatasetTest(root_dir, transformation_val, transformation_target)
 
     train_loader = DataLoader(celebDataset_train, **train_kwargs, shuffle=True, num_workers=6)
 
@@ -285,11 +384,11 @@ def main():
     test_loader = DataLoader(celabDataset_test, **test_kwargs, shuffle=True, num_workers=6)
 
 
-    # model = unet()
-    # model.to(device)
-    # print(model)
+    model = unet()
+    model.to(device)
+    print(model)
 
-    model = ResNetUNet(n_class=19)
+    # model = ResNetUNet(n_class=19)
     # model = torch.hub.load('pytorch/vision:v0.10.0',
     #                        'deeplabv3_resnet50', pretrained=False)
 
@@ -301,9 +400,9 @@ def main():
 
 
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=2e-5)
-    # criterion = nn.CrossEntropyLoss().to(device)
+    criterion = nn.CrossEntropyLoss().to(device)
     # criterion = nn.NLLLoss().to(device)
-    criterion = nn.BCEWithLogitsLoss()
+    # criterion = nn.BCEWithLogitsLoss()
 
     last_epoch = 0
     exp_lr_scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
