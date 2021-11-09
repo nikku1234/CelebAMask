@@ -225,7 +225,7 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # print(labels.size())
         optimizer.zero_grad()
         outputs = model(inputs)
-        mask = torch.zeros((labels.size(0), 512, 512))
+        mask = torch.zeros((labels.size(0), 512, 512)).to(device)
 
 
         atts = ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
@@ -348,9 +348,9 @@ def test(model, device, test_loader, criterion):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='CelebHQ')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=8, metavar='N',
                         help='input batch size for training (default: 32)')
-    parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=8, metavar='N',
                         help='input batch size for testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of epochs to train (default: 14)')
