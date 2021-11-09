@@ -22,11 +22,17 @@ from collections import defaultdict
 import torch.nn.functional as F
 from loss.loss import dice_loss
 from model.new_unet import ResNetUNet
+from utils import *
 
 train_losses = []
 train_accu = []
 eval_losses = []
 eval_accu = []
+
+
+def reset_grad(self):
+    self.g_optimizer.zero_grad()
+
 
 
 def save_checkpoint(model, epoch, optimizer, scheduler, loss, checkpoint_dir, max_checkpoints=5):
@@ -79,7 +85,7 @@ def save_statistics(epoch, training_loss, train_accuracy, validation_loss, valid
 
 
 def calc_loss(pred, target, metrics, bce_weight=0.5):
-    bce = F.binary_cross_entropy_with_logits(pred, target)
+    bce = nn.CrossEntropyLoss()
 
     pred = F.sigmoid(pred)
     dice = dice_loss(pred, target)
@@ -100,6 +106,27 @@ def print_metrics(metrics, epoch_samples, phase):
 
     print("{}: {}".format(phase, ", ".join(outputs)))
 
+
+def dice_loss(pred, target):
+    """This definition generalize to real valued pred and target vector.
+This should be differentiable.
+    pred: tensor with first dimension as batch
+    target: tensor with first dimension as batch
+    """
+
+    smooth = 1.
+
+    # have to use contiguous since they may from a torch.view op
+    iflat = pred.contiguous().view(-1)
+    tflat = target.contiguous().view(-1)
+    intersection = (iflat * tflat).sum()
+
+    A_sum = torch.sum(tflat * iflat)
+    B_sum = torch.sum(tflat * tflat)
+
+    return 1 - ((2. * intersection + smooth) / (A_sum + B_sum + smooth))
+
+
 def train(args, model, device, train_loader, optimizer, scheduler, epoch, criterion):
     model.train()
     running_loss = 0.0
@@ -112,10 +139,31 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
     for batch_idx, data in enumerate(train_loader):
         inputs = data['image'].to(device)
         labels = data['label'].to(device)
+        size = labels.size()
+        labels[:, 0, :, :] = labels[:, 0, :, :] * 255.0
+        labels_real_plain = labels[:, 0, :, :].cuda()
+        labels = labels[:, 0, :, :].view(size[0], 1, size[2], size[3])
+        oneHot_size = (size[0], 19, size[2], size[3])
+        labels_real = torch.cuda.FloatTensor(torch.Size(oneHot_size)).zero_()
+        labels_real = labels_real.scatter_(1, labels.data.long().cuda(), 1.0)
+
+
+        
+        # labels = labels.squeeze()
+        # print(labels.size())
         optimizer.zero_grad()
         outputs = model(inputs)
+        # criterion = nn.NLLLoss()
+
+        c_loss = cross_entropy2d(outputs, labels_real_plain.long())
+        print(c_loss.item())
+        reset_grad()
+
+
+
+        # loss = dice_loss(outputs,labels)
         loss = calc_loss(outputs, labels, metrics)
-        # loss = criterion(outputs, labels)
+        # loss = criterion(outputs, labels_real)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -242,6 +290,8 @@ def main():
     # print(model)
 
     model = ResNetUNet(n_class=19)
+    # model = torch.hub.load('pytorch/vision:v0.10.0',
+    #                        'deeplabv3_resnet50', pretrained=False)
 
 
     model = model.to(device)
@@ -251,7 +301,10 @@ def main():
 
 
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=2e-5)
-    criterion = nn.CrossEntropyLoss().to(device)
+    # criterion = nn.CrossEntropyLoss().to(device)
+    # criterion = nn.NLLLoss().to(device)
+    criterion = nn.BCEWithLogitsLoss()
+
     last_epoch = 0
     exp_lr_scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
     # exp_lr_scheduler = ReduceLROnPlateau(optimizer, 'max', factor=0.5)
@@ -264,8 +317,7 @@ def main():
     # optimizer.cuda()
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(last_epoch + 1, args.epochs + 1):
-        train_loss, train_accuracy = train(
-            args, model, device, train_loader, optimizer, exp_lr_scheduler, epoch, criterion)
+        train_loss, train_accuracy = train(args, model, device, train_loader, optimizer, exp_lr_scheduler, epoch, criterion)
         test_loss, test_accuracy = test(model, device, test_loader, criterion)
         exp_lr_scheduler.step()
         if epoch % 10 == 0:

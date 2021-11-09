@@ -4,6 +4,8 @@ from torch.utils.data import Dataset, DataLoader
 import glob2
 import cv2
 from PIL import Image
+import torchvision.transforms as transforms
+
 
 class celebDatasetTrain(Dataset):
     def __init__(self, root_dir, transform, target_transform=None) -> None:
@@ -12,6 +14,10 @@ class celebDatasetTrain(Dataset):
         self.transform = transform
         self.train_image_path = glob2.glob(root_dir+'/train_img/*.jpg', recursive=True)
         self.train_label_path = glob2.glob(root_dir+'/train_label/*.png', recursive=True)
+        self.label_transform = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1), transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485],
+                                 std=[0.229])])
 
         # self.val_image_path = glob2.glob(root_dir+'/val_img/*.jpg', recursive=True)
         # self.val_lable_path = glob2.glob(root_dir+'/val_label/*.png', recursive=True)
@@ -28,9 +34,11 @@ class celebDatasetTrain(Dataset):
         image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_AREA)
         image = Image.fromarray(image)
         image = self.transform(image)
-        label = cv2.imread(self.train_label_path[idx])
+        label = cv2.imread(self.train_label_path[idx],-1)
+        # label_img = cv2.imread(label_img_path, -1)
+        # label = cv2.cvtColor(label, cv2.COLOR_BGR2GRAY)
         label = Image.fromarray(label)
-        label = self.transform(label)
+        label=self.label_transform(label)
         final = {
             "image": image,
             "label": label
@@ -68,6 +76,7 @@ class celebDatasetVal(Dataset):
         image = Image.fromarray(image)
         image = self.transform(image)
         label = cv2.imread(self.val_lable_path[idx])
+        # label = cv2.cvtColor(label, cv2.COLOR_BGR2GRAY)
         label = Image.fromarray(label)
         label = self.transform(label)
         final = {
@@ -107,6 +116,7 @@ class celebDatasetTest(Dataset):
         image = Image.fromarray(image)
         image = self.transform(image)
         label = cv2.imread(self.test_lable_path[idx])
+        # label = cv2.cvtColor(label, cv2.COLOR_BGR2GRAY)
         label = Image.fromarray(label)
         label = self.transform(label)
         final = {

@@ -52,5 +52,4 @@ import cv2
 # train_loader = DataLoader(celebDataset_train, shuffle=True, num_workers=6)
 # print(train_loader[0])
 
-print(cv2.imread(
-    '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/data/test_img/0.jpg').shape)
+print(cv2.imread('/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/data/test_label/0.png').shape)
