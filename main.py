@@ -260,19 +260,20 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         # iou = IoU_score(outputs, labels)
         iou = jaccard_index(_fast_hist(labels.long(), mask.unsqueeze(dim=0).long(), 19))
         # _fast_hist(true, pred, num_classes=2)
+        print("loss",loss.item())
         print("iou",iou[0])
         loss.backward()
         optimizer.step()
-        running_loss += loss.item()
-        sub_loss += loss.item()
+        # running_loss += loss.item()
+        # sub_loss += loss.item()
 
-        _, predicted = torch.max(outputs, 1)
-        total += labels.size(0)
-        correct += predicted.eq(labels).sum().item()
+        # _, predicted = torch.max(outputs, 1)
+        # total += labels.size(0)
+        # correct += predicted.eq(labels).sum().item()
 
-        if (batch_idx + 1) % 3 == 0:
-            print("loss:", sub_loss/3, "Accuracy:", correct/total)
-            sub_loss = 0.0
+        # if (batch_idx + 1) % 3 == 0:
+        #     print("loss:", sub_loss/3, "Accuracy:", correct/total)
+        #     sub_loss = 0.0
         # statistics
         epoch_samples += inputs.size(0)
 
