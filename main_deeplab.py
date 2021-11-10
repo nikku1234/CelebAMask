@@ -271,7 +271,7 @@ def main():
 
     root_dir = '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/data'
 
-    checkpoint_dir = './checkpoints/model_deeplab/'
+    checkpoint_dir = './checkpoints/model_deeplab_2/'
     if not os.path.exists(checkpoint_dir):
         os.mkdir(checkpoint_dir)
 
@@ -309,7 +309,10 @@ def main():
 
 
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=2e-5)
-    criterion = nn.CrossEntropyLoss().to(device)
+    weights = torch.Tensor([1.1037,   1.2556,  76.0338,  78.1486, 146.6824, 147.1786, 112.4721,
+         68.7856,  81.4313, 347.5591,  15.3843, 105.1958,  76.9024,  46.7859,
+          8.0940, 947.0166,   9.9271,   1.0000,  35.4613])
+    criterion = nn.CrossEntropyLoss(weight=weights).to(device)
 
     last_epoch = 0
     exp_lr_scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
@@ -326,9 +329,9 @@ def main():
         train_loss, train_accuracy = train(args, model, device, train_loader, optimizer, exp_lr_scheduler, epoch, criterion)
         test_loss, test_accuracy = test(model, device, test_loader, criterion)
         exp_lr_scheduler.step()
-        if epoch % 10 == 0:
-            save_checkpoint(model, epoch, optimizer, exp_lr_scheduler,
-                            train_loss, checkpoint_dir, max_checkpoints=100)
+        # if epoch % 10 == 0:
+        save_checkpoint(model, epoch, optimizer, exp_lr_scheduler,
+                        train_loss, checkpoint_dir, max_checkpoints=100)
         save_statistics(epoch, train_loss, train_accuracy,
                         test_loss, test_accuracy, checkpoint_dir)
 
