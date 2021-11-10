@@ -1,3 +1,4 @@
 checkpoints/model_deeplab/model_10.pt
 *.pt
 ./checkpoints/*/*.txt
+data/*

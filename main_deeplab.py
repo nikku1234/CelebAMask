@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torchvision import io
 import torchvision.transforms as transforms
 import torch.optim as optim
-from torchvision.io import read_image
+# from torchvision.io import read_image
 from torch.autograd import Variable
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import argparse
@@ -230,9 +230,9 @@ def test(model, device, test_loader, criterion):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='CelebHQ')
-    parser.add_argument('--batch-size', type=int, default=19, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=4, metavar='N',
                         help='input batch size for training (default: 32)')
-    parser.add_argument('--test-batch-size', type=int, default=19, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=4, metavar='N',
                         help='input batch size for testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of epochs to train (default: 14)')
@@ -269,9 +269,9 @@ def main():
                                              transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
     transformation_target = transforms.Compose([transforms.ToTensor()])
 
-    root_dir = '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/data'
+    root_dir = '/home/csgrad/nramesh8/Celeb/CelebAMask/data/'
 
-    checkpoint_dir = './checkpoints/model_deeplab/'
+    checkpoint_dir = '/home/csgrad/nramesh8/Celeb/CelebAMask/checkpoints/model_deeplab_resnet101'
     if not os.path.exists(checkpoint_dir):
         os.mkdir(checkpoint_dir)
 
@@ -297,8 +297,8 @@ def main():
     # model = unet()
     # model.to(device)
     # print(model)
-    model = models.segmentation.deeplabv3_mobilenet_v3_large(pretrained=True)
-    model.classifier = DeepLabHead(960, 19)
+    model = models.segmentation.deeplabv3_resnet101(pretrained=True)
+    model.classifier = DeepLabHead(2048, 19)
     model.train()
 
     model = model.to(device)
@@ -326,9 +326,9 @@ def main():
         train_loss, train_accuracy = train(args, model, device, train_loader, optimizer, exp_lr_scheduler, epoch, criterion)
         test_loss, test_accuracy = test(model, device, test_loader, criterion)
         exp_lr_scheduler.step()
-        if epoch % 10 == 0:
-            save_checkpoint(model, epoch, optimizer, exp_lr_scheduler,
-                            train_loss, checkpoint_dir, max_checkpoints=100)
+        # if epoch % 10 == 0:
+        save_checkpoint(model, epoch, optimizer, exp_lr_scheduler,
+                        train_loss, checkpoint_dir, max_checkpoints=100)
         save_statistics(epoch, train_loss, train_accuracy,
                         test_loss, test_accuracy, checkpoint_dir)
 

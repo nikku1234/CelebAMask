@@ -1,6 +1,12 @@
 import os
 import re
 import pandas as pd
+import cv2
+import numpy as np
+
+image = cv2.imread(
+    "/home/csgrad/nramesh8/Celeb/CelebAMask/data/test_label/1.png")
+print(image)
 
 
 # mapping = "/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/CelebA-HQ-to-CelebA-mapping.txt"
