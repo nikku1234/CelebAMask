@@ -16,7 +16,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import argparse
 from torchvision.transforms.transforms import RandomAffine, RandomVerticalFlip
 from dataLoader.celebDataset import celebDatasetTrain,celebDatasetVal,celebDatasetTest
-# from model.unet import unet
 from matplotlib import pyplot as plt
 from torchsummary import summary
 from collections import defaultdict
