@@ -11,6 +11,7 @@ trans = transforms.Compose([transforms.ToTensor()])
 classes = list(range(19))
 class_pixel_count = [0] * 19
 count = 0
+c = 1.02
 for train_lab in train_label_path:
     label = Image.open(train_lab)
     label = trans(label)
@@ -20,4 +21,7 @@ for train_lab in train_label_path:
     for class_val in classes:
         class_map = torch.where(label == class_val, 1, 0)
         class_pixel_count[class_val] += torch.sum(class_map)
-print(torch.Tensor(class_pixel_count)/count)
+prospensity_score = torch.Tensor(class_pixel_count)/sum(class_pixel_count)
+print(prospensity_score)
+class_weights = 1 / (torch.log(c + prospensity_score))
+print(class_weights)

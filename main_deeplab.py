@@ -179,10 +179,10 @@ def train(args, model, device, train_loader, optimizer, scheduler, epoch, criter
         outputs = model(inputs)
 
         labels = labels.reshape((labels.size(0), 512, 512))
-        loss = criterion(outputs['out'], labels.long())
+        loss = criterion(outputs, labels.long())
         print("loss", loss.item())
 
-        iou = mIOU(labels, outputs['out'])
+        iou = mIOU(labels, outputs)
         total_iou += iou
         
         loss.backward()
@@ -213,8 +213,8 @@ def test(model, device, test_loader, criterion):
             outputs = model(inputs)
 
             labels = labels.reshape((labels.size(0), 512, 512))
-            loss = criterion(outputs['out'], labels.long())
-            total_iou += mIOU(labels, outputs['out'])
+            loss = criterion(outputs, labels.long())
+            total_iou += mIOU(labels, outputs)
             running_loss += loss.item()
 
         test_loss = running_loss/len(test_loader)
@@ -224,15 +224,15 @@ def test(model, device, test_loader, criterion):
         eval_iou.append(mean_iou)
 
         print('Test Loss: %.3f | IoU: %.3f' % (test_loss, mean_iou))
-        return test_loss, eval_iou
+        return test_loss, mean_iou
 
 
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='CelebHQ')
-    parser.add_argument('--batch-size', type=int, default=19, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=10, metavar='N',
                         help='input batch size for training (default: 32)')
-    parser.add_argument('--test-batch-size', type=int, default=19, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=10, metavar='N',
                         help='input batch size for testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of epochs to train (default: 14)')
@@ -271,7 +271,7 @@ def main():
 
     root_dir = '/home/nramesh8/Desktop/Vision/CelebAMask/CelebAMask-HQ/data'
 
-    checkpoint_dir = './checkpoints/model_deeplab_2/'
+    checkpoint_dir = './checkpoints/model_unet_3/'
     if not os.path.exists(checkpoint_dir):
         os.mkdir(checkpoint_dir)
 
@@ -294,12 +294,12 @@ def main():
     test_loader = DataLoader(celabDataset_test, **test_kwargs, shuffle=True, num_workers=6)
 
 
-    # model = unet()
-    # model.to(device)
-    # print(model)
-    model = models.segmentation.deeplabv3_mobilenet_v3_large(pretrained=True)
-    model.classifier = DeepLabHead(960, 19)
-    model.train()
+    model = unet()
+    model.to(device)
+    print(model)
+    # model = models.segmentation.deeplabv3_mobilenet_v3_large(pretrained=True)
+    # model.classifier = DeepLabHead(960, 19)
+    # model.train()
 
     model = model.to(device)
 
@@ -309,9 +309,13 @@ def main():
 
 
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=2e-5)
-    weights = torch.Tensor([1.1037,   1.2556,  76.0338,  78.1486, 146.6824, 147.1786, 112.4721,
-         68.7856,  81.4313, 347.5591,  15.3843, 105.1958,  76.9024,  46.7859,
-          8.0940, 947.0166,   9.9271,   1.0000,  35.4613])
+    # weights = torch.Tensor([1.1037,   1.2556,  76.0338,  78.1486, 146.6824, 147.1786, 112.4721,
+    #      68.7856,  81.4313, 347.5591,  15.3843, 105.1958,  76.9024,  46.7859,
+    #       8.0940, 947.0166,   9.9271,   1.0000,  35.4613])
+
+    weights = torch.Tensor([ 3.7214,  4.1377, 41.8469, 42.0414, 45.6062, 45.6210, 44.3024, 41.1064,
+        42.3267, 48.3100, 25.0782, 43.9302, 41.9279, 37.8107, 17.3563, 49.6724,
+        19.7082,  3.4329, 35.0137])
     criterion = nn.CrossEntropyLoss(weight=weights).to(device)
 
     last_epoch = 0

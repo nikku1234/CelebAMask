@@ -1,0 +1,21 @@
+
+
+epoch: 1
+training_loss: 0.6414357654907429,   Train_accuracy:0.3013700734246355
+validation_loss: 0.5460318282720478   Validation_accuracy:0.3500538940543112
+
+epoch: 2
+training_loss: 0.4348652536968103,   Train_accuracy:0.4218965759882013
+validation_loss: 0.4838726702722138   Validation_accuracy:0.3880434902385294
+
+epoch: 3
+training_loss: 0.39094727423847486,   Train_accuracy:0.4967178889013162
+validation_loss: 0.4511971739071418   Validation_accuracy:0.4461696549116622
+
+epoch: 4
+training_loss: 0.37332297276987325,   Train_accuracy:0.5445456190950114
+validation_loss: 0.4788751933894815   Validation_accuracy:0.4116198545135147
+
+epoch: 5
+training_loss: 0.3665438590832316,   Train_accuracy:0.5587841423655343
+validation_loss: 0.508303674602677   Validation_accuracy:0.4707536189959517
